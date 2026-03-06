@@ -1,0 +1,187 @@
+/* =========================
+   GLOBAL RESET
+========================= */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --primary: #2563eb;
+  --primary-light: #3b82f6;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --text: #1e293b;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.08);
+  --radius: 14px;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: "Inter", "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* =========================
+   LAYOUT
+========================= */
+
+.content-area {
+  width: 100%;
+}
+
+.section-header {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 28px;
+  color: var(--text);
+}
+
+/* =========================
+   CARDS
+========================= */
+
+.document-card,
+.upload-box,
+.search-section,
+.department-section {
+  background: var(--card);
+  padding: 28px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.document-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-4px);
+}
+
+.upload-box {
+  border: 2px dashed var(--border);
+  text-align: center;
+  padding: 40px;
+}
+
+/* =========================
+   BUTTONS
+========================= */
+
+button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--primary-light);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.clear-btn {
+  background: var(--danger);
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.clear-btn:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+/* =========================
+   STATUS BADGES
+========================= */
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.status-completed {
+  background: #dcfce7;
+  color: var(--success);
+}
+
+.status-pending {
+  background: #fee2e2;
+  color: var(--danger);
+}
+
+/* =========================
+   EMPTY STATE
+========================= */
+
+.empty-state {
+  text-align: center;
+  padding: 60px 40px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  background: #fafbfc;
+}
+
+/* =========================
+   ERROR MESSAGE
+========================= */
+
+.error-message {
+  color: var(--danger);
+  background: #fee2e2;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid var(--danger);
+  margin-top: 15px;
+  font-size: 14px;
+}
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 768px) {
+  .section-header {
+    font-size: 22px;
+    margin-bottom: 20px;
+  }
+
+  .document-card,
+  .upload-box {
+    padding: 20px;
+  }
+
+  button {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+}
