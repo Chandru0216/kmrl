@@ -11,22 +11,27 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
 
-  // Read user from localStorage on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem("kmrl_user");
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    localStorage.removeItem("document_routing_user");
+    localStorage.removeItem("kmrl_user");
+    const savedToken = sessionStorage.getItem("document_routing_token");
+    const savedUser = sessionStorage.getItem("document_routing_user");
+    if (savedToken && savedUser) setUser(JSON.parse(savedUser));
+
+    const handleExpiredSession = () => setUser(null);
+    window.addEventListener("auth-expired", handleExpiredSession);
+    return () =>
+      window.removeEventListener("auth-expired", handleExpiredSession);
   }, []);
 
   const handleLogin = (userData) => {
     setUser(userData);
-    localStorage.setItem("kmrl_user", JSON.stringify(userData));
   };
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem("kmrl_user");
+    sessionStorage.removeItem("document_routing_token");
+    sessionStorage.removeItem("document_routing_user");
     setSidebarOpen(false);
   };
 
@@ -73,7 +78,7 @@ function App() {
               whiteSpace: "nowrap",
             }}
           >
-            🚆 KMRL
+            Document Routing Engine
           </h2>
           <nav
             style={{
@@ -246,7 +251,7 @@ function App() {
               ☰
             </button>
             <h1 style={{ margin: 0, fontSize: "22px", fontWeight: "600" }}>
-              KMRL - Document Intelligence
+              Document Routing Engine
             </h1>
             <div
               style={{ marginLeft: "auto", fontSize: "14px", color: "#cccccc" }}

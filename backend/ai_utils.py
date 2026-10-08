@@ -7,7 +7,8 @@ logging.basicConfig(level=logging.INFO)
 
 # Try to import AI libraries, but have fallbacks ready
 try:
-    from transformers import pipeline
+    import torch
+    from transformers import AutoModel, AutoTokenizer, pipeline
     HAS_TRANSFORMERS = True
 except:
     HAS_TRANSFORMERS = False
@@ -114,10 +115,76 @@ def summarize_text(text):
 # -------------------------------------------------
 # CATEGORY CLASSIFICATION
 # -------------------------------------------------
-def classify_category(text):
-    """Classify document category"""
+_CATEGORY_DESCRIPTIONS = {
+    "Safety Circular": "A safety policy, safety circular, hazard warning, accident prevention instruction, or workplace precaution notice.",
+    "Invoice": "A vendor bill or invoice requesting payment for goods or services, including prices, taxes, totals, and payment terms.",
+    "Legal Notice": "A formal legal communication about laws, claims, litigation, court proceedings, liability, or regulatory obligations.",
+    "Technical Report": "A technical analysis of software, hardware, engineering systems, IT infrastructure, faults, or technical support.",
+    "Employee Info": "An employee or human resources record about staff, personnel, attendance, benefits, recruitment, or workplace policy.",
+    "Report": "An organizational report presenting operational results, financial analysis, findings, conclusions, or project progress.",
+    "Schedule": "A timetable or plan for maintenance, operations, appointments, shifts, events, or work dates.",
+    "General Document": "General correspondence or a document that does not primarily concern safety, finance, law, technology, human resources, reporting, or scheduling."
+}
+_CATEGORY_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+_semantic_tokenizer = None
+_semantic_model = None
+_category_embeddings = None
+
+
+def _encode_semantic_texts(texts):
+    tokens = _semantic_tokenizer(
+        texts,
+        padding=True,
+        truncation=True,
+        max_length=256,
+        return_tensors="pt"
+    )
+    with torch.no_grad():
+        token_embeddings = _semantic_model(**tokens).last_hidden_state
+        attention_mask = tokens["attention_mask"].unsqueeze(-1).expand(token_embeddings.size())
+        mask = attention_mask.to(token_embeddings.dtype)
+        embeddings = (token_embeddings * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
+        return torch.nn.functional.normalize(embeddings, p=2, dim=1)
+
+
+def _load_semantic_classifier():
+    global _semantic_tokenizer, _semantic_model, _category_embeddings
+
+    if _category_embeddings is None:
+        if not HAS_TRANSFORMERS:
+            raise RuntimeError("Transformers and PyTorch are required for semantic classification")
+        _semantic_tokenizer = AutoTokenizer.from_pretrained(_CATEGORY_MODEL_NAME)
+        _semantic_model = AutoModel.from_pretrained(_CATEGORY_MODEL_NAME)
+        _semantic_model.eval()
+        labels = list(_CATEGORY_DESCRIPTIONS)
+        descriptions = [_CATEGORY_DESCRIPTIONS[label] for label in labels]
+        _category_embeddings = (labels, _encode_semantic_texts(descriptions))
+
+    return _category_embeddings
+
+
+def _split_into_chunks(text, chunk_size=120, overlap=20):
+    words = text.split()
+    if len(words) <= chunk_size:
+        return [text]
+
+    step = chunk_size - overlap
+    return [" ".join(words[index:index + chunk_size]) for index in range(0, len(words), step)]
+
+
+def _classify_category_semantically(text):
+    labels, category_embeddings = _load_semantic_classifier()
+    chunks = _split_into_chunks(text)
+    chunk_embeddings = _encode_semantic_texts(chunks)
+    similarities = chunk_embeddings @ category_embeddings.T
+    top_count = min(3, len(chunks))
+    category_scores = similarities.topk(top_count, dim=0).values.mean(dim=0)
+    return labels[int(category_scores.argmax().item())]
+
+
+def _classify_category_by_keywords(text):
     text_lower = text.lower()
-    
+
     category_keywords = {
         "Safety Circular": ["safety", "circular", "safe", "hazard", "warning", "precaution"],
         "Invoice": ["invoice", "bill", "payment", "amount", "total", "rupees", "price"],
@@ -133,8 +200,23 @@ def classify_category(text):
         score = sum(text_lower.count(keyword) for keyword in keywords)
         scores[category] = score
     
-    best_category = max(scores, key=scores.get) if scores else "General Document"
-    logging.info(f"Classified as: {best_category}")
+    if not scores or max(scores.values()) == 0:
+        return "General Document"
+    return max(scores, key=scores.get)
+
+
+def classify_category(text):
+    """Classify a document by semantic similarity to pretrained category embeddings."""
+    if not text or not text.strip():
+        return "General Document"
+
+    try:
+        best_category = _classify_category_semantically(text)
+    except Exception as error:
+        logging.warning("Semantic classification unavailable; using keyword fallback: %s", error)
+        best_category = _classify_category_by_keywords(text)
+
+    logging.info("Classified as: %s", best_category)
     return best_category
 
 

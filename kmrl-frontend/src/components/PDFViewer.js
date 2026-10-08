@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-
-const API = "http://127.0.0.1:5000";
+import API, { apiFetch } from "../api";
 
 export default function PDFViewer({ doc, onClose }) {
   const [loading, setLoading] = useState(true);
@@ -23,7 +22,7 @@ export default function PDFViewer({ doc, onClose }) {
   // Load text files
   useEffect(() => {
     if (fileExt === "txt") {
-      fetch(fileUrl, { mode: "cors" })
+      apiFetch(fileUrl, { mode: "cors" })
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.text();
@@ -48,7 +47,7 @@ export default function PDFViewer({ doc, onClose }) {
 
     setTranslating(true);
     try {
-      const res = await fetch(`${API}/translate`, {
+      const res = await apiFetch(`${API}/translate`, {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json" },

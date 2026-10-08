@@ -4,8 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Alert from "../components/Alert";
 import PDFViewer from "../components/PDFViewer";
 import IntelligenceView from "../components/IntelligenceView";
-
-const API = "http://127.0.0.1:5000";
+import API, { apiFetch } from "../api";
 
 function Documents({ user }) {
   const location = useLocation();
@@ -19,7 +18,7 @@ function Documents({ user }) {
     try {
       const url = `${API}/documents`;
       console.log("Fetching documents from:", url);
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         mode: "cors",
         headers: { "Content-Type": "application/json" },
       });
@@ -101,7 +100,7 @@ function Documents({ user }) {
 
     try {
       console.log(`Sending DELETE request to ${API}/delete/${id}`);
-      const res = await fetch(`${API}/delete/${id}`, {
+      const res = await apiFetch(`${API}/delete/${id}`, {
         method: "DELETE",
         mode: "cors",
         headers: { "Content-Type": "application/json" },

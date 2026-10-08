@@ -1,7 +1,6 @@
 import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
-const API = "http://127.0.0.1:5000";
+import API, { apiFetch } from "../api";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const UPLOAD_TIMEOUT = 120000; // 2 minutes for AI processing
 
@@ -61,7 +60,7 @@ export default function Upload({ user }) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT);
 
-      const res = await fetch(`${API}/upload`, {
+      const res = await apiFetch(`${API}/upload`, {
         method: "POST",
         mode: "cors",
         credentials: "omit",

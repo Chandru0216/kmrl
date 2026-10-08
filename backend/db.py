@@ -1,7 +1,6 @@
 from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
-import ssl
 from bson import ObjectId
 import logging
 
@@ -46,6 +45,8 @@ class MockCollection:
                             match = False
                     elif doc.get(key) != value:
                         match = False
+                elif doc.get(key) != value:
+                    match = False
             if match:
                 results.append(doc)
         return MockCursor(results)
@@ -143,19 +144,17 @@ class MockDeleteResult:
 
 class MockDatabase:
     def __init__(self):
-        self.documents = MockCollection()
+        self.collections = {"documents": MockCollection(), "users": MockCollection()}
+        self.documents = self.collections["documents"]
     
     def __getitem__(self, name):
-        return self.documents
+        return self.collections.setdefault(name, MockCollection())
 
 # Try to connect to MongoDB Atlas
 try:
     if mongo_uri:
         client = MongoClient(
             mongo_uri,
-            ssl=True,
-            tlsAllowInvalidCertificates=True,
-            tlsAllowInvalidHostnames=True,
             serverSelectionTimeoutMS=5000,
             socketTimeoutMS=5000,
             connectTimeoutMS=5000,
@@ -164,14 +163,18 @@ try:
         
         # Test connection with shorter timeout
         client.admin.command('ping')
-        db = client["kmrl_db"]
+        db = client["document_routing_db"]
         collection = db["documents"]
+        users_collection = db["users"]
         print("✓ MongoDB Atlas connection successful")
     else:
         raise Exception("No MONGO_URI provided")
 except Exception as e:
+    if os.getenv("APP_ENV") == "production":
+        raise RuntimeError("MongoDB is required in production") from e
     print(f"⚠ MongoDB connection failed: {str(e)[:80]}...")
     print("✓ Using in-memory fallback database for testing")
     # Use mock database as fallback
     mock_db = MockDatabase()
     collection = mock_db.documents
+    users_collection = mock_db["users"]

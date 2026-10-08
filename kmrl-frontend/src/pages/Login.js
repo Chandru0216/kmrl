@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
+import API_URL from "../api";
 
 const departments = [
   "Safety & Compliance",
@@ -9,7 +10,7 @@ const departments = [
   "Legal",
   "Infrastructure",
   "Administration",
-  "Management"
+  "Management",
 ];
 
 export default function Login({ onLogin }) {
@@ -19,14 +20,15 @@ export default function Login({ onLogin }) {
     password: "",
     confirmPassword: "",
     fullname: "",
-    department: "Safety & Compliance"
+    department: "Safety & Compliance",
+    registrationCode: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
     setError("");
   };
 
@@ -55,8 +57,8 @@ export default function Login({ onLogin }) {
           setLoading(false);
           return;
         }
-        if (formData.password.length < 6) {
-          setError("Password must be at least 6 characters");
+        if (formData.password.length < 12) {
+          setError("Password must be at least 12 characters");
           setLoading(false);
           return;
         }
@@ -65,18 +67,37 @@ export default function Login({ onLogin }) {
           setLoading(false);
           return;
         }
+        if (!formData.registrationCode.trim()) {
+          setError("Registration code is required");
+          setLoading(false);
+          return;
+        }
       }
 
-      // Create user data
-      const userData = {
-        email: formData.email,
-        fullname: isRegister ? formData.fullname : formData.email.split("@")[0],
-        department: formData.department,
-        registeredAt: new Date().toISOString()
-      };
+      const response = await fetch(
+        `${API_URL}/auth/${isRegister ? "register" : "login"}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            fullname: formData.fullname,
+            department: formData.department,
+            registration_code: formData.registrationCode,
+          }),
+        },
+      );
+      const result = await response.json();
+      if (!response.ok)
+        throw new Error(result.error || "Authentication failed");
 
-      localStorage.setItem("kmrl_user", JSON.stringify(userData));
-      onLogin(userData);
+      sessionStorage.setItem("document_routing_token", result.token);
+      sessionStorage.setItem(
+        "document_routing_user",
+        JSON.stringify(result.user),
+      );
+      onLogin(result.user);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -85,14 +106,16 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "20px"
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+      }}
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -103,31 +126,46 @@ export default function Login({ onLogin }) {
           borderRadius: "20px",
           boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
           width: "100%",
-          maxWidth: "450px"
+          maxWidth: "450px",
         }}
       >
-        <h1 style={{
-          textAlign: "center",
-          color: "#1e293b",
-          marginBottom: "10px",
-          fontSize: "28px",
-          fontWeight: "700"
-        }}>
-          🚆 KMRL
+        <h1
+          style={{
+            textAlign: "center",
+            color: "#1e293b",
+            marginBottom: "10px",
+            fontSize: "28px",
+            fontWeight: "700",
+          }}
+        >
+          Document Routing Engine
         </h1>
-        <p style={{
-          textAlign: "center",
-          color: "#64748b",
-          marginBottom: "30px",
-          fontSize: "14px"
-        }}>
-          Document Intelligence System
+        <p
+          style={{
+            textAlign: "center",
+            color: "#64748b",
+            marginBottom: "30px",
+            fontSize: "14px",
+          }}
+        >
+          Intelligent document intake, analysis, and routing
         </p>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+        >
           {/* Email */}
           <div>
-            <label style={{ color: "#1e293b", fontWeight: "600", fontSize: "13px", display: "block", marginBottom: "6px" }}>
+            <label
+              style={{
+                color: "#1e293b",
+                fontWeight: "600",
+                fontSize: "13px",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               📧 Email
             </label>
             <input
@@ -142,7 +180,7 @@ export default function Login({ onLogin }) {
                 border: "1px solid #e2e8f0",
                 borderRadius: "8px",
                 fontSize: "14px",
-                boxSizing: "border-box"
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -150,7 +188,15 @@ export default function Login({ onLogin }) {
           {/* Full Name (Register only) */}
           {isRegister && (
             <div>
-              <label style={{ color: "#1e293b", fontWeight: "600", fontSize: "13px", display: "block", marginBottom: "6px" }}>
+              <label
+                style={{
+                  color: "#1e293b",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  display: "block",
+                  marginBottom: "6px",
+                }}
+              >
                 👤 Full Name
               </label>
               <input
@@ -165,7 +211,7 @@ export default function Login({ onLogin }) {
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   fontSize: "14px",
-                  boxSizing: "border-box"
+                  boxSizing: "border-box",
                 }}
               />
             </div>
@@ -173,7 +219,15 @@ export default function Login({ onLogin }) {
 
           {/* Department */}
           <div>
-            <label style={{ color: "#1e293b", fontWeight: "600", fontSize: "13px", display: "block", marginBottom: "6px" }}>
+            <label
+              style={{
+                color: "#1e293b",
+                fontWeight: "600",
+                fontSize: "13px",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               🏢 Department
             </label>
             <select
@@ -186,18 +240,59 @@ export default function Login({ onLogin }) {
                 border: "1px solid #e2e8f0",
                 borderRadius: "8px",
                 fontSize: "14px",
-                boxSizing: "border-box"
+                boxSizing: "border-box",
               }}
             >
-              {departments.map(dept => (
-                <option key={dept} value={dept}>{dept}</option>
+              {departments.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
               ))}
             </select>
           </div>
 
+          {isRegister && (
+            <div>
+              <label
+                style={{
+                  color: "#1e293b",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  display: "block",
+                  marginBottom: "6px",
+                }}
+              >
+                Registration Code
+              </label>
+              <input
+                type="password"
+                name="registrationCode"
+                value={formData.registrationCode}
+                onChange={handleChange}
+                autoComplete="off"
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          )}
+
           {/* Password */}
           <div>
-            <label style={{ color: "#1e293b", fontWeight: "600", fontSize: "13px", display: "block", marginBottom: "6px" }}>
+            <label
+              style={{
+                color: "#1e293b",
+                fontWeight: "600",
+                fontSize: "13px",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               🔒 Password
             </label>
             <input
@@ -212,7 +307,7 @@ export default function Login({ onLogin }) {
                 border: "1px solid #e2e8f0",
                 borderRadius: "8px",
                 fontSize: "14px",
-                boxSizing: "border-box"
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -220,7 +315,15 @@ export default function Login({ onLogin }) {
           {/* Confirm Password (Register only) */}
           {isRegister && (
             <div>
-              <label style={{ color: "#1e293b", fontWeight: "600", fontSize: "13px", display: "block", marginBottom: "6px" }}>
+              <label
+                style={{
+                  color: "#1e293b",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  display: "block",
+                  marginBottom: "6px",
+                }}
+              >
                 🔒 Confirm Password
               </label>
               <input
@@ -235,7 +338,7 @@ export default function Login({ onLogin }) {
                   border: "1px solid #e2e8f0",
                   borderRadius: "8px",
                   fontSize: "14px",
-                  boxSizing: "border-box"
+                  boxSizing: "border-box",
                 }}
               />
             </div>
@@ -243,14 +346,16 @@ export default function Login({ onLogin }) {
 
           {/* Error Message */}
           {error && (
-            <div style={{
-              background: "#fee2e2",
-              color: "#991b1b",
-              padding: "12px 14px",
-              borderRadius: "8px",
-              fontSize: "13px",
-              border: "1px solid #fecaca"
-            }}>
+            <div
+              style={{
+                background: "#fee2e2",
+                color: "#991b1b",
+                padding: "12px 14px",
+                borderRadius: "8px",
+                fontSize: "13px",
+                border: "1px solid #fecaca",
+              }}
+            >
               ❌ {error}
             </div>
           )}
@@ -270,19 +375,27 @@ export default function Login({ onLogin }) {
               fontSize: "16px",
               fontWeight: "700",
               cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1
+              opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? "⏳ Processing..." : isRegister ? "📝 Register" : "🔓 Login"}
+            {loading
+              ? "⏳ Processing..."
+              : isRegister
+                ? "📝 Register"
+                : "🔓 Login"}
           </motion.button>
 
           {/* Toggle Login/Register */}
-          <div style={{
-            textAlign: "center",
-            color: "#64748b",
-            fontSize: "13px"
-          }}>
-            {isRegister ? "Already have an account? " : "Don't have an account? "}
+          <div
+            style={{
+              textAlign: "center",
+              color: "#64748b",
+              fontSize: "13px",
+            }}
+          >
+            {isRegister
+              ? "Already have an account? "
+              : "Don't have an account? "}
             <button
               type="button"
               onClick={() => setIsRegister(!isRegister)}
@@ -292,7 +405,7 @@ export default function Login({ onLogin }) {
                 color: "#667eea",
                 fontWeight: "700",
                 cursor: "pointer",
-                textDecoration: "underline"
+                textDecoration: "underline",
               }}
             >
               {isRegister ? "Login" : "Register"}

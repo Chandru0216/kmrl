@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-
-const API_URL = "http://127.0.0.1:5000";
+import API_URL, { apiFetch } from "../api";
 
 export default function IntelligenceView({ docId, docName, onClose }) {
   const [intelligence, setIntelligence] = useState(null);
@@ -20,7 +19,7 @@ export default function IntelligenceView({ docId, docName, onClose }) {
         console.log(`Fetching intelligence for docId: ${docId}`);
         const url = `${API_URL}/extract-intelligence/${docId}`;
         console.log(`Fetch URL: ${url}`);
-        const res = await fetch(url);
+        const res = await apiFetch(url);
         const data = await res.json();
         console.log("Intelligence response status:", res.status);
         console.log("Intelligence response data:", data);

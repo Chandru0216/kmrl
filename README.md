@@ -1,4 +1,4 @@
-# 🚆 KMRL Document Intelligence System 2.0
+# Document Routing Engine 2.0
 
 ## Enterprise-Grade Document Management with AI-Powered Intelligence
 
@@ -10,9 +10,9 @@
 
 ## 📖 Overview
 
-KMRL Document Intelligence System 2.0 is a comprehensive enterprise solution designed to transform how the Kochi Metro Rail Limited (KMRL) manages thousands of documents across multiple departments. The system automatically processes, analyzes, and routes documents while providing real-time intelligence and compliance tracking.
+Document Routing Engine 2.0 is a comprehensive enterprise solution for organizations that manage documents across multiple departments. The system automatically processes, analyzes, and routes documents while providing real-time intelligence and compliance tracking.
 
-**The Challenge**: KMRL generates 1000+ pages daily across multiple channels (email, Maximo, SharePoint) in English and Malayalam, creating:
+**The Challenge**: Organizations receive thousands of pages daily across multiple channels (email, enterprise systems, and shared repositories), creating:
 
 - Information latency (managers waste hours skimming documents)
 - Siloed awareness (departments unaware of relevant updates)
@@ -384,7 +384,7 @@ python test_integration.py
 Expected Output:
 
 ```
-🧪 KMRL SYSTEM INTEGRATION TEST SUITE
+🧪 DOCUMENT ROUTING ENGINE INTEGRATION TEST SUITE
 ✅ API Connectivity        Working
 ✅ AI Summarization       Working
 ✅ Content Intelligence   Working
@@ -460,7 +460,7 @@ Expected Output:
 
 ## 📊 Success Metrics
 
-The KMRL system is designed to improve:
+The document routing engine is designed to improve:
 
 - **Information Latency**: 80% reduction (from 4 hours → 30 min)
 - **Decision Speed**: 60% faster (from 1 week → 3 days)
@@ -472,7 +472,7 @@ The KMRL system is designed to improve:
 
 ## 🤝 Contributing
 
-This system is maintained by KMRL IT Department.
+This system can be maintained by the deploying organization's IT team.
 
 For support, issues, or suggestions:
 
@@ -508,21 +508,21 @@ For support, issues, or suggestions:
 1. **Documentation**: Check INTEGRATION_GUIDE.md and DEPLOYMENT_GUIDE.md
 2. **Testing**: Run `python test_integration.py`
 3. **Logs**: Check `backend.log` and browser console (F12)
-4. **Issues**: Contact KMRL IT Department
+4. **Issues**: Contact your organization's IT support team
 
 ---
 
 ## 📄 License
 
-Private - KMRL Internal Use Only
+Private - deploy within your organization's security boundary
 
 ---
 
 ## 🏆 Acknowledgments
 
-This system was built to solve critical document management challenges at KMRL, enhancing operational efficiency, compliance readiness, and employee productivity.
+This system was built to solve critical document management challenges, enhancing operational efficiency, compliance readiness, and employee productivity.
 
-**Built with ❤️ for safer, faster metro operations**
+**Built for faster, clearer document operations**
 
 ---
 
@@ -542,4 +542,4 @@ This system was built to solve critical document management challenges at KMRL, 
 **Status**: ✅ Production Ready  
 **Last Updated**: February 20, 2026  
 **Version**: 2.0 Enterprise Edition  
-**Contact**: KMRL IT Department
+**Contact**: Your organization's IT support team

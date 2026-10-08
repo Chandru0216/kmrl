@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
-const API = "http://127.0.0.1:5000";
+import API, { apiFetch } from "../api";
 
 export default function Search() {
   const [query, setQuery] = useState("");
@@ -20,8 +19,8 @@ export default function Search() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(
-        `${API}/search?q=${encodeURIComponent(query.trim())}`
+      const res = await apiFetch(
+        `${API}/search?q=${encodeURIComponent(query.trim())}`,
       );
 
       if (!res.ok) throw new Error("Server error");
@@ -30,7 +29,7 @@ export default function Search() {
 
       // ✅ Remove duplicates safely
       const uniqueDocs = Array.from(
-        new Map((data || []).map(doc => [doc._id, doc])).values()
+        new Map((data || []).map((doc) => [doc._id, doc])).values(),
       );
 
       setSearchResults(uniqueDocs);
@@ -46,14 +45,12 @@ export default function Search() {
   // ✅ Optimistic update instead of re-search
   const updateStatus = async (id) => {
     try {
-      await fetch(`${API}/update-status/${id}`, { method: "PUT" });
+      await apiFetch(`${API}/update-status/${id}`, { method: "PUT" });
 
-      setSearchResults(prev =>
-        prev.map(doc =>
-          doc._id === id
-            ? { ...doc, status: "Completed" }
-            : doc
-        )
+      setSearchResults((prev) =>
+        prev.map((doc) =>
+          doc._id === id ? { ...doc, status: "Completed" } : doc,
+        ),
       );
     } catch (err) {
       console.error("Status update failed:", err);
@@ -121,10 +118,7 @@ export default function Search() {
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.2 }}
                   >
-                    <DocumentCard
-                      doc={doc}
-                      updateStatus={updateStatus}
-                    />
+                    <DocumentCard doc={doc} updateStatus={updateStatus} />
                   </motion.div>
                 ))}
               </div>
@@ -151,14 +145,18 @@ function DocumentCard({ doc, updateStatus }) {
         )}
       </div>
 
-      <p className="summary">
-        {doc.summary || "No summary available."}
-      </p>
+      <p className="summary">{doc.summary || "No summary available."}</p>
 
       <div className="meta">
-        <p><b>Category:</b> {doc.category || "N/A"}</p>
-        <p><b>Department:</b> {doc.department || "N/A"}</p>
-        <p><b>Deadline:</b> {doc.deadline || "N/A"}</p>
+        <p>
+          <b>Category:</b> {doc.category || "N/A"}
+        </p>
+        <p>
+          <b>Department:</b> {doc.department || "N/A"}
+        </p>
+        <p>
+          <b>Deadline:</b> {doc.deadline || "N/A"}
+        </p>
       </div>
 
       <div
@@ -170,10 +168,7 @@ function DocumentCard({ doc, updateStatus }) {
       </div>
 
       {!isCompleted && (
-        <button
-          className="mark-btn"
-          onClick={() => updateStatus(doc._id)}
-        >
+        <button className="mark-btn" onClick={() => updateStatus(doc._id)}>
           ✓ Mark Completed
         </button>
       )}

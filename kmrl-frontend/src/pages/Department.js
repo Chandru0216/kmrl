@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
-const API = "http://127.0.0.1:5000";
+import API, { apiFetch } from "../api";
 
 export default function Department() {
   const [allDocs, setAllDocs] = useState([]);
@@ -18,14 +17,14 @@ export default function Department() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`${API}/documents`);
+      const res = await apiFetch(`${API}/documents`);
       if (!res.ok) throw new Error("Failed to fetch documents");
 
       const data = await res.json();
 
       // ✅ Remove duplicates by _id
       const uniqueDocs = Array.from(
-        new Map((data || []).map(doc => [doc._id, doc])).values()
+        new Map((data || []).map((doc) => [doc._id, doc])).values(),
       );
 
       setAllDocs(uniqueDocs);
@@ -39,32 +38,26 @@ export default function Department() {
 
   // ✅ Unique departments
   const allDepartments = useMemo(() => {
-    return [...new Set(
-      allDocs
-        .map(doc => doc.department?.trim())
-        .filter(Boolean)
-    )];
+    return [
+      ...new Set(allDocs.map((doc) => doc.department?.trim()).filter(Boolean)),
+    ];
   }, [allDocs]);
 
   // ✅ Filter docs safely
   const departmentResults = useMemo(() => {
     if (!selectedDepartment) return [];
-    return allDocs.filter(
-      doc => doc.department === selectedDepartment
-    );
+    return allDocs.filter((doc) => doc.department === selectedDepartment);
   }, [selectedDepartment, allDocs]);
 
   // ✅ Optimistic UI update (no full reload)
   const updateStatus = useCallback(async (id) => {
     try {
-      await fetch(`${API}/update-status/${id}`, { method: "PUT" });
+      await apiFetch(`${API}/update-status/${id}`, { method: "PUT" });
 
-      setAllDocs(prev =>
-        prev.map(doc =>
-          doc._id === id
-            ? { ...doc, status: "Completed" }
-            : doc
-        )
+      setAllDocs((prev) =>
+        prev.map((doc) =>
+          doc._id === id ? { ...doc, status: "Completed" } : doc,
+        ),
       );
     } catch (err) {
       console.error("Status update failed:", err);
@@ -73,7 +66,6 @@ export default function Department() {
 
   return (
     <div className="page-wrapper">
-
       <div className="content-area">
         <h2 className="section-header">🏢 Filter by Department</h2>
 
@@ -93,9 +85,7 @@ export default function Department() {
                     <button
                       key={dept}
                       onClick={() => setSelectedDepartment(dept)}
-                      className={
-                        selectedDepartment === dept ? "active" : ""
-                      }
+                      className={selectedDepartment === dept ? "active" : ""}
                     >
                       {dept}
                     </button>
@@ -128,9 +118,7 @@ export default function Department() {
               </h2>
 
               {departmentResults.length === 0 ? (
-                <p className="empty-state">
-                  No documents in this department.
-                </p>
+                <p className="empty-state">No documents in this department.</p>
               ) : (
                 <div className="card-grid">
                   {departmentResults.map((doc) => (
@@ -139,10 +127,7 @@ export default function Department() {
                       whileHover={{ scale: 1.02 }}
                       transition={{ duration: 0.2 }}
                     >
-                      <DocumentCard
-                        doc={doc}
-                        updateStatus={updateStatus}
-                      />
+                      <DocumentCard doc={doc} updateStatus={updateStatus} />
                     </motion.div>
                   ))}
                 </div>
@@ -176,14 +161,18 @@ function DocumentCard({ doc, updateStatus }) {
         )}
       </div>
 
-      <p className="summary">
-        {doc.summary || "No summary available."}
-      </p>
+      <p className="summary">{doc.summary || "No summary available."}</p>
 
       <div className="meta">
-        <p><b>Category:</b> {doc.category || "N/A"}</p>
-        <p><b>Department:</b> {doc.department || "N/A"}</p>
-        <p><b>Deadline:</b> {doc.deadline || "N/A"}</p>
+        <p>
+          <b>Category:</b> {doc.category || "N/A"}
+        </p>
+        <p>
+          <b>Department:</b> {doc.department || "N/A"}
+        </p>
+        <p>
+          <b>Deadline:</b> {doc.deadline || "N/A"}
+        </p>
       </div>
 
       <div
@@ -195,10 +184,7 @@ function DocumentCard({ doc, updateStatus }) {
       </div>
 
       {!isCompleted && (
-        <button
-          className="mark-btn"
-          onClick={() => updateStatus(doc._id)}
-        >
+        <button className="mark-btn" onClick={() => updateStatus(doc._id)}>
           ✓ Mark Completed
         </button>
       )}

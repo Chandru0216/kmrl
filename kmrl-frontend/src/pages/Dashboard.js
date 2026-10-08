@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Mail } from "lucide-react";
 import PDFViewer from "../components/PDFViewer";
 import Alert from "../components/Alert";
-
-const API = "http://127.0.0.1:5000";
+import API, { apiFetch } from "../api";
 
 const departments = [
   "All Departments",
@@ -32,6 +32,7 @@ export default function Dashboard({ user }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [syncingEmail, setSyncingEmail] = useState(false);
   const [alert, setAlert] = useState(null);
   const [deadlineFilter, setDeadlineFilter] = useState("All");
 
@@ -40,11 +41,11 @@ export default function Dashboard({ user }) {
     try {
       setLoading(true);
       const [statsRes, docsRes] = await Promise.all([
-        fetch(`${API}/stats`, {
+        apiFetch(`${API}/stats`, {
           mode: "cors",
           headers: { "Content-Type": "application/json" },
         }),
-        fetch(`${API}/documents`, {
+        apiFetch(`${API}/documents`, {
           mode: "cors",
           headers: { "Content-Type": "application/json" },
         }),
@@ -93,7 +94,7 @@ export default function Dashboard({ user }) {
     formData.append("department", user?.department || "Administration");
 
     try {
-      const res = await fetch(`${API}/upload`, {
+      const res = await apiFetch(`${API}/upload`, {
         method: "POST",
         mode: "cors",
         body: formData,
@@ -117,6 +118,27 @@ export default function Dashboard({ user }) {
     }
   };
 
+  const handleEmailSync = async () => {
+    setSyncingEmail(true);
+    try {
+      const response = await apiFetch(`${API}/sync-source/email`, {
+        method: "POST",
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Email sync failed");
+
+      setAlert({
+        message: `Email sync complete: ${result.synced} imported, ${result.skipped} already imported, ${result.failed} failed.`,
+        type: result.failed ? "warning" : "success",
+      });
+      if (result.synced) await loadData();
+    } catch (error) {
+      setAlert({ message: error.message, type: "error" });
+    } finally {
+      setSyncingEmail(false);
+    }
+  };
+
   // Search functionality
   const searchDocs = async (query) => {
     setSearchQuery(query);
@@ -125,10 +147,13 @@ export default function Dashboard({ user }) {
     }
 
     try {
-      const res = await fetch(`${API}/search?q=${encodeURIComponent(query)}`, {
-        mode: "cors",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await apiFetch(
+        `${API}/search?q=${encodeURIComponent(query)}`,
+        {
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
 
       if (res.ok) {
         const results = await res.json();
@@ -146,7 +171,7 @@ export default function Dashboard({ user }) {
   // Update document status
   const updateStatus = async (id) => {
     try {
-      const res = await fetch(`${API}/update-status/${id}`, {
+      const res = await apiFetch(`${API}/update-status/${id}`, {
         method: "PUT",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
@@ -327,6 +352,28 @@ export default function Dashboard({ user }) {
                 {uploading ? "⏳ Uploading..." : "↗️ Upload"}
               </button>
             </form>
+            <button
+              type="button"
+              onClick={handleEmailSync}
+              disabled={syncingEmail || uploading}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                marginTop: "14px",
+                background: "#2a2a2a",
+                color: "#ffffff",
+                border: "1px solid #555555",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                fontWeight: "600",
+                cursor: syncingEmail || uploading ? "not-allowed" : "pointer",
+                opacity: syncingEmail || uploading ? 0.7 : 1,
+              }}
+            >
+              <Mail size={16} aria-hidden="true" />
+              {syncingEmail ? "Syncing email..." : "Sync email"}
+            </button>
           </div>
 
           {/* Deadline Alert Card - Right Side */}

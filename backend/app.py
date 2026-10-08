@@ -1,31 +1,41 @@
-from flask import Flask, request, jsonify, send_from_directory, abort
+from flask import Flask, request, jsonify, send_from_directory, abort, g
 from werkzeug.utils import secure_filename, safe_join
+from werkzeug.security import check_password_hash, generate_password_hash
 from flask_cors import CORS
 import os
 import logging
+import hmac
+import re
+import secrets
 import pdfplumber
 import pytesseract
 from pdf2image import convert_from_path
 from bson import ObjectId
 from datetime import datetime
 from pymongo import ASCENDING
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 # AI pipeline (NEW advanced version)
 from ai_utils import analyze_document, detect_language, translate_to_english
-from source_integration import SourceIntegrationManager
+from source_integration import EmailConnector, INTEGRATION_CONFIG, SourceIntegrationManager
+# routing helper (optional AWS publish)
+from routing import apply_dual_dispatch
 
 # MongoDB
-from db import collection
+from db import collection, users_collection
 
 # -------------------------------------------------
 # CONFIG
 # -------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = os.getenv(
+    "TESSERACT_CMD",
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe" if os.name == "nt" else "tesseract",
+)
 
 # Use explicit path to ensure uploads are in backend folder
-UPLOAD_FOLDER = r"C:\Users\chand\Desktop\kmrl\backend\uploads"
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 MAX_FILE_SIZE = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"pdf", "txt", "png", "jpg", "jpeg"}
 
@@ -53,14 +63,161 @@ try:
 except Exception as e:
     print(f"⚠ Index setup deferred: {str(e)[:100]}...")
 
+try:
+    collection.create_index("source_id", unique=True, sparse=True, name="source_id_1")
+except Exception as e:
+    logging.warning("Source deduplication index setup deferred: %s", e)
+
 # -------------------------------------------------
 # FLASK INIT
 # -------------------------------------------------
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+CORS_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+if os.getenv("APP_ENV") == "production" and (not CORS_ORIGINS or "*" in CORS_ORIGINS):
+    raise RuntimeError("CORS_ORIGINS must contain the deployed frontend origin in production")
+CORS(
+    app,
+    resources={r"/*": {"origins": CORS_ORIGINS}},
+)
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config['JSON_SORT_KEYS'] = False
+
+auth_secret = os.getenv("AUTH_SECRET")
+if not auth_secret:
+    if os.getenv("APP_ENV") == "production":
+        raise RuntimeError("AUTH_SECRET must be configured in production")
+    auth_secret = secrets.token_urlsafe(32)
+    logging.warning("Using a temporary development auth secret; sessions expire on restart")
+app.secret_key = auth_secret
+auth_serializer = URLSafeTimedSerializer(auth_secret, salt="document-routing-auth-v1")
+AUTH_TOKEN_MAX_AGE = 8 * 60 * 60
+PUBLIC_ENDPOINTS = {"health_check", "register", "login"}
+
+try:
+    users_collection.create_index("email", unique=True, name="email_1")
+except Exception as error:
+    if os.getenv("APP_ENV") == "production":
+        raise RuntimeError("A unique user email index is required in production") from error
+    logging.warning("Could not ensure user email index: %s", error)
+
+
+@app.before_request
+def require_authentication():
+    if request.method == "OPTIONS" or request.endpoint in PUBLIC_ENDPOINTS:
+        return None
+
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        return jsonify({"error": "Authentication required"}), 401
+
+    try:
+        payload = auth_serializer.loads(
+            authorization[7:], max_age=AUTH_TOKEN_MAX_AGE
+        )
+        user_id = ObjectId(payload["user_id"])
+    except (BadSignature, SignatureExpired, KeyError, TypeError, ValueError):
+        return jsonify({"error": "Invalid or expired session"}), 401
+
+    user = users_collection.find_one({"_id": user_id})
+    if not user:
+        return jsonify({"error": "Invalid or expired session"}), 401
+
+    g.current_user = user
+    return None
+
+
+def create_auth_response(user, status=200):
+    token = auth_serializer.dumps({"user_id": str(user["_id"])})
+    public_user = {
+        "email": user["email"],
+        "fullname": user["fullname"],
+        "department": user["department"],
+    }
+    return jsonify({"token": token, "user": public_user}), status
+
+
+@app.route("/auth/register", methods=["POST", "OPTIONS"])
+def register():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    expected_code = os.getenv("REGISTRATION_CODE")
+    if not expected_code:
+        return jsonify({"error": "Account registration is not configured"}), 503
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Invalid account details"}), 400
+    email = payload.get("email", "")
+    password = payload.get("password", "")
+    fullname = payload.get("fullname", "")
+    department = payload.get("department", "")
+    registration_code = payload.get("registration_code", "")
+
+    if not all(isinstance(value, str) for value in (email, password, fullname, department)):
+        return jsonify({"error": "Invalid account details"}), 400
+    email = email.strip().lower()
+    fullname = fullname.strip()
+    department = department.strip()
+
+    if not hmac.compare_digest(str(registration_code), expected_code):
+        return jsonify({"error": "Invalid registration code"}), 403
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        return jsonify({"error": "Enter a valid email address"}), 400
+    if not 12 <= len(password) <= 128:
+        return jsonify({"error": "Password must be between 12 and 128 characters"}), 400
+    if not fullname or len(fullname) > 120 or len(department) > 80:
+        return jsonify({"error": "Invalid account details"}), 400
+    if users_collection.find_one({"email": email}):
+        return jsonify({"error": "An account with that email already exists"}), 409
+
+    user = {
+        "email": email,
+        "password_hash": generate_password_hash(password, method="scrypt"),
+        "fullname": fullname,
+        "department": department,
+        "created_at": datetime.utcnow(),
+    }
+    try:
+        result = users_collection.insert_one(user)
+        user["_id"] = result.inserted_id
+    except Exception:
+        if users_collection.find_one({"email": email}):
+            return jsonify({"error": "An account with that email already exists"}), 409
+        logging.exception("Account registration failed")
+        return jsonify({"error": "Account registration failed"}), 500
+
+    return create_auth_response(user, 201)
+
+
+@app.route("/auth/login", methods=["POST", "OPTIONS"])
+def login():
+    if request.method == "OPTIONS":
+        return "", 204
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Email or password is incorrect"}), 401
+    email = payload.get("email", "")
+    password = payload.get("password", "")
+    if not isinstance(email, str) or not isinstance(password, str):
+        return jsonify({"error": "Email or password is incorrect"}), 401
+    user = users_collection.find_one({"email": email.strip().lower()})
+    password_hash = user.get("password_hash", "") if user else ""
+    if not user or not isinstance(password_hash, str) or not check_password_hash(password_hash, password):
+        return jsonify({"error": "Email or password is incorrect"}), 401
+
+    return create_auth_response(user)
+
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "ok"}), 200
 
 # -------------------------------------------------
 # HELPERS
@@ -110,7 +267,10 @@ def extract_text_from_file(path):
         # OCR fallback for PDFs
         if not text.strip():
             try:
-                images = convert_from_path(path, poppler_path=r"C:\poppler\bin", dpi=300)
+                poppler_path = os.getenv("POPPLER_PATH")
+                if poppler_path is None and os.name == "nt":
+                    poppler_path = r"C:\poppler\bin"
+                images = convert_from_path(path, poppler_path=poppler_path, dpi=300)
                 for img in images:
                     text += pytesseract.image_to_string(img, lang="eng+mal")
                 logging.info(f"OCR extraction from PDF: {len(text)} chars")
@@ -123,6 +283,80 @@ def extract_text_from_file(path):
 # -------------------------------------------------
 # UPLOAD
 # -------------------------------------------------
+class DocumentIngestionError(Exception):
+    def __init__(self, message, status_code=400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def ingest_document(filename, content, source_type="upload", metadata=None, source_id=None):
+    filename = secure_filename(filename or "")
+    if not filename or not allowed_file(filename):
+        raise DocumentIngestionError("Only PDF, TXT, PNG, JPG files are allowed")
+    if not isinstance(content, bytes) or not content:
+        raise DocumentIngestionError("The attachment is empty or invalid")
+    if len(content) > MAX_FILE_SIZE:
+        raise DocumentIngestionError("File exceeds 10MB limit", 413)
+    if source_id and collection.find_one({"source_id": source_id}):
+        raise DocumentIngestionError("This email attachment was already imported", 409)
+    if collection.find_one({"filename": filename}):
+        raise DocumentIngestionError("File already exists", 409)
+
+    filepath = os.path.abspath(os.path.join(UPLOAD_FOLDER, filename))
+    saved = False
+    try:
+        with open(filepath, "xb") as stored_file:
+            stored_file.write(content)
+        saved = True
+
+        text = extract_text_from_file(filepath)
+        if not text.strip():
+            raise DocumentIngestionError("Text extraction failed", 422)
+
+        ai_result = analyze_document(text)
+        doc_data = {
+            "filename": filename,
+            "summary": ai_result["summary"],
+            "key_points": ai_result.get("key_points", []),
+            "language": ai_result["language"],
+            "category": ai_result["category"],
+            "department": ai_result.get("department"),
+            "deadline": ai_result["deadline"],
+            "actions": ai_result["actions"],
+            "keywords": ai_result["keywords"],
+            "financial_data": ai_result.get("financial_data", {}),
+            "decisions_commitments": ai_result.get("decisions_commitments", {}),
+            "compliance_flags": ai_result.get("compliance_flags", {}),
+            "routing_recipients": ai_result.get("routing_recipients", []),
+            "routing_details": ai_result.get("routing_details", []),
+            "department_scores": ai_result.get("department_scores", {}),
+            "department_priorities": ai_result.get("department_priorities", {}),
+            "predictive_alerts": ai_result.get("predictive_alerts", []),
+            "status": "Pending",
+            "uploaded_at": datetime.utcnow(),
+            "path": filepath,
+            "source_type": source_type,
+        }
+        if source_id:
+            doc_data["source_id"] = source_id
+        if metadata:
+            doc_data.update(metadata)
+
+        result = collection.insert_one(doc_data)
+        doc_data["_id"] = str(result.inserted_id)
+        try:
+            apply_dual_dispatch(
+                doc_data["_id"], filename, doc_data.get("routing_details", []), collection
+            )
+        except Exception as error:
+            logging.warning("Routing dispatch failed or is not configured: %s", error)
+        return doc_data
+    except Exception:
+        if saved and os.path.exists(filepath):
+            os.remove(filepath)
+        raise
+
+
 @app.route("/upload", methods=["POST", "OPTIONS"])
 def upload_file():
     if request.method == "OPTIONS":
@@ -139,62 +373,11 @@ def upload_file():
     if not allowed_file(file.filename):
         return jsonify({"error": "Only PDF, TXT, PNG, JPG files allowed"}), 400
 
-    filename = secure_filename(file.filename)
-
-    # File size check
-    file.seek(0, os.SEEK_END)
-    file_length = file.tell()
-    file.seek(0)
-
-    if file_length > MAX_FILE_SIZE:
-        return jsonify({"error": "File exceeds 10MB limit"}), 400
-
-    filepath = os.path.join(UPLOAD_FOLDER, filename)
-
-    # Duplicate prevention via DB unique index
-    if collection.find_one({"filename": filename}):
-        return jsonify({"error": "File already exists"}), 400
-
-    file.save(filepath)
-    filepath = os.path.abspath(filepath)  # Ensure absolute path
-    logging.info(f"File saved: {filepath}")
-
     try:
-        text = extract_text_from_file(filepath)
-
-        if not text.strip():
-            return jsonify({"error": "Text extraction failed"}), 400
-
-        logging.info(f"Text extracted, running AI analysis...")
-        ai_result = analyze_document(text)
-        logging.info(f"AI analysis complete")
-
-        doc_data = {
-            "filename": filename,
-            "summary": ai_result["summary"],
-            "key_points": ai_result.get("key_points", []),
-            "language": ai_result["language"],
-            "category": ai_result["category"],
-            "department": ai_result["department"],
-            "deadline": ai_result["deadline"],
-            "actions": ai_result["actions"],
-            "keywords": ai_result["keywords"],
-            "financial_data": ai_result.get("financial_data", {}),
-            "decisions_commitments": ai_result.get("decisions_commitments", {}),
-            "compliance_flags": ai_result.get("compliance_flags", {}),
-            "routing_recipients": ai_result.get("routing_recipients", []),
-            "predictive_alerts": ai_result.get("predictive_alerts", []),
-            "status": "Pending",
-            "uploaded_at": datetime.utcnow(),
-            "path": filepath
-        }
-
-        result = collection.insert_one(doc_data)
-        doc_data["_id"] = str(result.inserted_id)
-        logging.info(f"Document inserted with ID: {doc_data['_id']}")
-
+        doc_data = ingest_document(file.filename, file.read())
         return jsonify(doc_data), 200
-
+    except DocumentIngestionError as error:
+        return jsonify({"error": str(error)}), error.status_code
     except Exception as e:
         logging.error(f"Upload failed: {e}", exc_info=True)
         return jsonify({"error": "Processing failed", "details": str(e)}), 500
@@ -695,6 +878,60 @@ def alert_center():
 
 # Initialize source integration manager
 source_manager = SourceIntegrationManager()
+email_config = INTEGRATION_CONFIG["email"]
+if email_config.get("email") and email_config.get("password"):
+    source_manager.register_source("email", EmailConnector(email_config))
+
+
+def ingest_email_attachments(documents):
+    synced = 0
+    skipped = 0
+    errors = []
+    imported = []
+
+    for doc in documents:
+        original_filename = doc.get("filename", "")
+        try:
+            safe_original = secure_filename(original_filename)
+            source_id = doc.get("source_id")
+            if not safe_original or not source_id:
+                raise DocumentIngestionError("Missing attachment identity")
+            if collection.find_one({"source_id": source_id}):
+                skipped += 1
+                continue
+
+            extension = os.path.splitext(safe_original)[1]
+            base_name = os.path.splitext(safe_original)[0][:160]
+            stored_filename = f"email_{source_id[:12]}_{base_name}{extension}"
+            stored_doc = ingest_document(
+                stored_filename,
+                doc.get("content"),
+                source_type="email",
+                source_id=source_id,
+                metadata={
+                    "original_filename": safe_original,
+                    "email_sender": str(doc.get("sender", "Unknown"))[:320],
+                    "email_subject": str(doc.get("subject", "No Subject"))[:500],
+                    "email_message_id": str(doc.get("message_id", ""))[:255],
+                },
+            )
+            imported.append({
+                "_id": stored_doc["_id"],
+                "filename": stored_doc["filename"],
+                "original_filename": safe_original,
+            })
+            synced += 1
+        except Exception as error:
+            errors.append({"filename": str(original_filename)[:255], "error": str(error)})
+            logging.error("Failed to import email attachment %s: %s", original_filename, error)
+
+    return {
+        "synced": synced,
+        "skipped": skipped,
+        "failed": len(errors),
+        "errors": errors[:10],
+        "documents": imported,
+    }
 
 
 # -------------------------------------------------
@@ -707,7 +944,14 @@ def sync_all_sources():
     
     try:
         logging.info("Starting source synchronization...")
+        if not source_manager.sources:
+            return jsonify({"error": "No document sources are configured"}), 503
         documents = source_manager.sync_all_sources()
+
+        if any(doc.get("source") == "email" for doc in documents):
+            result = ingest_email_attachments(documents)
+            result["message"] = "Email synchronization complete"
+            return jsonify(result), 200
         
         synced_count = 0
         failed_count = 0
@@ -754,14 +998,27 @@ def sync_specific_source(source_name):
     
     try:
         logging.info(f"Syncing source: {source_name}")
+        if source_name == "email" and source_name not in source_manager.sources:
+            return jsonify({
+                "error": "Email sync is not configured. Set IMAP_HOST, EMAIL_ADDRESS, and EMAIL_PASSWORD."
+            }), 503
+
         documents = source_manager.sync_source(source_name)
-        
+        if source_name == "email":
+            result = ingest_email_attachments(documents)
+            result["message"] = "Email synchronization complete"
+            return jsonify(result), 200
+
         synced_count = 0
+        skipped_count = 0
+        failed = []
+        imported = []
         
         for doc in documents:
             try:
                 if collection.find_one({"filename": doc["filename"]}):
                     logging.warning(f"Document {doc['filename']} already exists")
+                    skipped_count += 1
                     continue
                 
                 doc["status"] = "Pending"
@@ -772,11 +1029,15 @@ def sync_specific_source(source_name):
                 synced_count += 1
             
             except Exception as e:
+                failed.append({"filename": doc.get("filename", "unknown"), "error": str(e)})
                 logging.error(f"Failed to sync {doc.get('filename')}: {e}")
         
         return jsonify({
             "message": f"Synced from {source_name}",
             "synced": synced_count,
+            "skipped": skipped_count,
+            "failed": len(failed),
+            "errors": failed[:10],
             "documents": documents[:5]
         }), 200
     

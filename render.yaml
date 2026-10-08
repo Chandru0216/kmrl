@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: kmrl-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: kmrl-uploads
+      mountPath: /app/uploads
+      sizeGB: 1
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: REGISTRATION_CODE
+        sync: false
+      - key: IMAP_HOST
+        value: imap.gmail.com
+      - key: EMAIL_ADDRESS
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false

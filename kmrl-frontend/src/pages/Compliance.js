@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import IntelligenceView from "../components/IntelligenceView";
-
-const API_URL = "http://127.0.0.1:5000";
+import API_URL, { apiFetch } from "../api";
 
 export default function Compliance() {
   const navigate = useNavigate();
@@ -20,7 +19,7 @@ export default function Compliance() {
 
   const fetchComplianceDashboard = async () => {
     try {
-      const res = await fetch(`${API_URL}/compliance-dashboard`);
+      const res = await apiFetch(`${API_URL}/compliance-dashboard`);
       if (res.ok) {
         const data = await res.json();
         setComplianceData(data);

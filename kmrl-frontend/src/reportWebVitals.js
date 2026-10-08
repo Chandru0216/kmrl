@@ -5,18 +5,18 @@ const reportWebVitals = async (onPerfEntry) => {
 
   try {
     const {
-      onCLS,
-      onINP,
-      onFCP,
-      onLCP,
-      onTTFB,
+      getCLS,
+      getFID,
+      getFCP,
+      getLCP,
+      getTTFB,
     } = await import("web-vitals");
 
-    onCLS(onPerfEntry);
-    onINP(onPerfEntry);   // Modern replacement for FID
-    onFCP(onPerfEntry);
-    onLCP(onPerfEntry);
-    onTTFB(onPerfEntry);
+    getCLS(onPerfEntry);
+    getFID(onPerfEntry);
+    getFCP(onPerfEntry);
+    getLCP(onPerfEntry);
+    getTTFB(onPerfEntry);
 
   } catch (error) {
     console.error("Failed to load web-vitals:", error);

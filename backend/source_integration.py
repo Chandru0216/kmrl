@@ -10,6 +10,9 @@ Handles automatic document imports from various sources:
 
 import logging
 import os
+import hashlib
+import email
+from email.header import decode_header, make_header
 from datetime import datetime
 from typing import List, Dict
 from abc import ABC, abstractmethod
@@ -57,41 +60,44 @@ class EmailConnector(SourceConnector):
     def fetch_documents(self) -> List[Dict]:
         """Fetch email attachments"""
         documents = []
-        
-        try:
-            # Select inbox
-            self.client.select("INBOX")
-            
-            # Search for emails with attachments from last 24 hours
-            status, messages = self.client.search(None, 'ALL')
-            message_ids = messages[0].split()[-100:]  # Last 100 emails
-            
-            for msg_id in message_ids:
-                status, msg_data = self.client.fetch(msg_id, '(RFC822)')
-                
-                # Parse email for attachments
-                import email
-                msg = email.message_from_bytes(msg_data[0][1])
-                
-                for part in msg.walk():
-                    if part.get_content_disposition() == 'attachment':
-                        filename = part.get_filename()
-                        content = part.get_payload(decode=True)
-                        
-                        documents.append({
-                            "filename": filename,
-                            "content": content,
-                            "source": "Email",
-                            "sender": msg.get("From", "Unknown"),
-                            "timestamp": datetime.now().isoformat(),
-                            "subject": msg.get("Subject", "No Subject")
-                        })
-            
-            self.logger.info(f"Fetched {len(documents)} documents from email")
-        
-        except Exception as e:
-            self.logger.error(f"Email fetch failed: {e}")
-        
+        self.client.select("INBOX")
+        status, messages = self.client.uid("search", None, "ALL")
+        if status != "OK":
+            raise RuntimeError("Could not search the email inbox")
+
+        message_uids = messages[0].split()[-100:]
+        for message_uid in message_uids:
+            status, msg_data = self.client.uid("fetch", message_uid, "(RFC822)")
+            if status != "OK" or not msg_data or not isinstance(msg_data[0], tuple):
+                self.logger.warning("Could not fetch email UID %s", message_uid.decode())
+                continue
+
+            msg = email.message_from_bytes(msg_data[0][1])
+            message_id = msg.get("Message-ID", "").strip()
+            for attachment_index, part in enumerate(msg.walk()):
+                raw_filename = part.get_filename()
+                if not raw_filename:
+                    continue
+
+                filename = str(make_header(decode_header(raw_filename)))
+                content = part.get_payload(decode=True)
+                if not content:
+                    continue
+
+                identity = f"{message_id}:{message_uid.decode()}:{attachment_index}:{filename}"
+                source_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+                documents.append({
+                    "filename": filename,
+                    "content": content,
+                    "source": "email",
+                    "source_id": source_id,
+                    "message_id": message_id,
+                    "sender": msg.get("From", "Unknown"),
+                    "timestamp": datetime.now().isoformat(),
+                    "subject": str(make_header(decode_header(msg.get("Subject", "No Subject"))))
+                })
+
+        self.logger.info("Fetched %s attachments from email", len(documents))
         return documents
     
     def disconnect(self):
@@ -352,9 +358,11 @@ class SourceIntegrationManager:
             try:
                 self.logger.info(f"Syncing from {source_name}...")
                 connector.connect()
-                documents = connector.fetch_documents()
+                try:
+                    documents = connector.fetch_documents()
+                finally:
+                    connector.disconnect()
                 all_documents.extend(documents)
-                connector.disconnect()
                 self.logger.info(f"Successfully synced {len(documents)} documents from {source_name}")
             
             except Exception as e:
@@ -372,14 +380,16 @@ class SourceIntegrationManager:
             connector = self.sources[source_name]
             self.logger.info(f"Syncing from {source_name}...")
             connector.connect()
-            documents = connector.fetch_documents()
-            connector.disconnect()
+            try:
+                documents = connector.fetch_documents()
+            finally:
+                connector.disconnect()
             self.logger.info(f"Synced {len(documents)} documents from {source_name}")
             return documents
         
         except Exception as e:
             self.logger.error(f"Sync failed for {source_name}: {e}")
-            return []
+            raise
 
 
 # Configuration templates

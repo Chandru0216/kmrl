@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import IntelligenceView from "../components/IntelligenceView";
-
-const API_URL = "http://127.0.0.1:5000";
+import API_URL, { apiFetch } from "../api";
 
 export default function AlertCenter() {
   const navigate = useNavigate();
@@ -36,7 +35,7 @@ export default function AlertCenter() {
 
   const fetchAlerts = async () => {
     try {
-      const res = await fetch(`${API_URL}/alert-center`);
+      const res = await apiFetch(`${API_URL}/alert-center`);
       if (res.ok) {
         const data = await res.json();
         setAlerts(data.alerts || []);

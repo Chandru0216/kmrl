@@ -1,8 +1,8 @@
-# KMRL Document Intelligence System - Complete Integration Guide
+# Document Routing Engine - Complete Integration Guide
 
 ## 🎯 System Overview
 
-Your KMRL system now includes **six advanced capabilities** for enterprise-wide document management, compliance tracking, and automated intelligence extraction.
+Your document routing engine now includes **six advanced capabilities** for enterprise-wide document management, compliance tracking, and automated intelligence extraction.
 
 ---
 
@@ -235,7 +235,7 @@ EMAIL_ADDRESS=your-email@gmail.com
 EMAIL_PASSWORD=your-app-password
 ```
 
-3. Documents auto-import from attachments
+3. Sign in to the dashboard and click **Sync email**. The sync checks the latest 100 Inbox messages, imports supported attachments (PDF, TXT, PNG, JPG; up to 10 MB), and skips previously imported attachments. Sync is on demand, not continuous polling.
 
 #### Maximo Integration
 
@@ -291,6 +291,8 @@ POST http://localhost:5000/sync-source/email
 POST http://localhost:5000/sync-source/sharepoint
 POST http://localhost:5000/sync-source/ftp
 ```
+
+Sync endpoints require a valid bearer token. Configure IMAP_HOST, EMAIL_ADDRESS, and EMAIL_PASSWORD in the backend environment before using email sync. For Gmail, enable IMAP and use an App Password.
 
 ---
 

@@ -1,0 +1,13 @@
+Flask
+flask-cors
+pdfplumber
+pytesseract
+pdf2image
+pymongo
+python-dotenv
+itsdangerous
+Pillow
+deep-translator
+langdetect
+boto3
+gunicorn

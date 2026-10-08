@@ -4,16 +4,8 @@ import sys
 sys.path.insert(0, '.')
 from datetime import datetime
 from db import collection
-from ai_utils import (
-    detect_language,
-    translate_to_english,
-    summarize_text,
-    extract_keywords,
-    classify_category,
-    map_department,
-    extract_deadline,
-    extract_action_items,
-)
+# Use the unified analysis path to get new routing fields
+from ai_utils import analyze_document
 # import helper functions from app without starting Flask server
 from app import extract_text_from_file
 
@@ -34,28 +26,31 @@ for fname in files:
     print('  -> Processing file...')
     try:
         text = extract_text_from_file(path)
-        language = detect_language(text)
-        english_text = translate_to_english(text, language)
-        summary = summarize_text(english_text)
-        keywords = extract_keywords(english_text)
-        category = classify_category(english_text)
-        department = map_department(category)
-        deadline = extract_deadline(english_text)
-        action = extract_action_items(english_text)
+        if not text or not text.strip():
+            print(f"  -> No text extracted from {fname}. Skipping.")
+            continue
+
+        ai_result = analyze_document(text)
 
         doc_data = {
             'filename': fname,
-            'language': language,
-            'summary': summary,
-            'keywords': keywords,
-            'category': category,
-            'department': department,
-            'deadline': deadline,
-            'actions': action,
+            'language': ai_result.get('language'),
+            'summary': ai_result.get('summary'),
+            'keywords': ai_result.get('keywords', []),
+            'category': ai_result.get('category'),
+            'department': ai_result.get('department'),
+            'deadline': ai_result.get('deadline'),
+            'actions': ai_result.get('actions', []),
             'status': 'Pending',
             'uploaded_at': datetime.utcnow(),
             'path': path,
+            # New routing fields
+            'routing_recipients': ai_result.get('routing_recipients', []),
+            'routing_details': ai_result.get('routing_details', []),
+            'department_scores': ai_result.get('department_scores', {}),
+            'department_priorities': ai_result.get('department_priorities', {}),
         }
+
         res = collection.insert_one(doc_data)
         print(f"  -> Inserted with _id: {res.inserted_id}")
     except Exception as e:
