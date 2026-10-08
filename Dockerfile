@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 RUN mkdir -p uploads
 
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-10000} --workers 2 --timeout 120 app:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-10000} --workers 1 --timeout 120 app:app"]
