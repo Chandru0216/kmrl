@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import IntelligenceView from "../components/IntelligenceView";
 import API_URL, { apiFetch } from "../api";
 
 export default function AlertCenter() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
-  const [filteredAlerts, setFilteredAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState("All");
   const [filterPriority, setFilterPriority] = useState("All");
@@ -29,10 +28,6 @@ export default function AlertCenter() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [alerts, filterType, filterPriority]);
-
   const fetchAlerts = async () => {
     try {
       const res = await apiFetch(`${API_URL}/alert-center`);
@@ -47,19 +42,15 @@ export default function AlertCenter() {
     }
   };
 
-  const applyFilters = () => {
-    let filtered = alerts;
-
-    if (filterType !== "All") {
-      filtered = filtered.filter((a) => a.alert_type === filterType);
-    }
-
-    if (filterPriority !== "All") {
-      filtered = filtered.filter((a) => a.priority === filterPriority);
-    }
-
-    setFilteredAlerts(filtered);
-  };
+  const filteredAlerts = useMemo(
+    () =>
+      alerts.filter(
+        (alert) =>
+          (filterType === "All" || alert.alert_type === filterType) &&
+          (filterPriority === "All" || alert.priority === filterPriority),
+      ),
+    [alerts, filterType, filterPriority],
+  );
 
   const getAlertIcon = (type) => {
     const icons = {
