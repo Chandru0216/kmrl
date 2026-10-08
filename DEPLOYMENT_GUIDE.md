@@ -456,3 +456,7 @@ The backend requires MongoDB, a signing secret, an invite code, and an exact fro
 To enable email sync on Render, also set `EMAIL_ADDRESS` and `EMAIL_PASSWORD`; `IMAP_HOST` defaults to Gmail and can be changed for another IMAP provider.
 
 The Render blueprint provisions a persistent upload disk on the paid Starter plan. Store deployment secrets in the provider's environment settings, not in source control. Login tokens expire after eight hours; logging out or closing the browser session removes the browser-held token.
+
+### Manual Render Web Service (without a Blueprint)
+
+Create a Web Service from the GitHub repository and select the Docker runtime. Set the Dockerfile path to `Dockerfile` and the Docker context directory to `.` (the repository root). The root Dockerfile builds the backend from `backend/` and installs its OCR system dependencies. Configure the same environment variables listed above, set the health check path to `/health`, and attach a persistent disk at `/app/uploads` if uploaded files must survive redeploys.
