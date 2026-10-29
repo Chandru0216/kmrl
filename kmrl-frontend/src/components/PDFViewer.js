@@ -6,39 +6,53 @@ export default function PDFViewer({ doc, onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [fileContent, setFileContent] = useState(null);
+  const [fileObjectUrl, setFileObjectUrl] = useState(null);
   const [translatingContent, setTranslatingContent] = useState(null);
   const [isTranslated, setIsTranslated] = useState(false);
   const [translating, setTranslating] = useState(false);
 
-  // Extract just the filename from the path
-  const filename =
-    doc.path.includes("/") || doc.path.includes("\\")
-      ? doc.path.split(/[\\/]/).pop()
-      : doc.path;
+  const storedPath = doc.path || doc.filename || "";
+  const filename = doc.filename || storedPath.split(/[\\/]/).pop();
 
-  const fileUrl = `${API}/uploads/${filename}`;
+  const fileUrl = `${API}/uploads/${encodeURIComponent(filename)}`;
   const fileExt = filename.split(".").pop().toLowerCase();
 
-  // Load text files
   useEffect(() => {
-    if (fileExt === "txt") {
-      apiFetch(fileUrl, { mode: "cors" })
-        .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.text();
-        })
-        .then((text) => {
-          setFileContent(text);
+    let active = true;
+    let objectUrl;
+
+    setLoading(true);
+    setError(null);
+    setFileContent(null);
+    setFileObjectUrl(null);
+    setTranslatingContent(null);
+    setIsTranslated(false);
+
+    apiFetch(fileUrl, { mode: "cors" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`File request failed (${res.status})`);
+        const blob = await res.blob();
+        if (fileExt === "txt") {
+          const text = await blob.text();
+          if (active) setFileContent(text);
+        }
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setFileObjectUrl(objectUrl);
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err.message);
           setLoading(false);
-        })
-        .catch((err) => {
-          setError(true);
-          setLoading(false);
-          console.error("Text load error:", err, "URL:", fileUrl);
-        });
-    } else {
-      setLoading(false);
-    }
+          console.error("File load error:", err, "URL:", fileUrl);
+        }
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [fileExt, fileUrl]);
 
   // Translate content to English
@@ -267,23 +281,24 @@ export default function PDFViewer({ doc, onClose }) {
                 fontSize: "13px",
               }}
             >
-              <div>⚠️ Could not load file</div>
+              <div>⚠️ Could not load file: {error}</div>
               <div style={{ marginTop: "8px", fontSize: "12px", opacity: 0.8 }}>
                 File: <code>{filename}</code>
               </div>
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  color: "#991b1b",
-                  textDecoration: "underline",
-                  marginTop: "10px",
-                  display: "inline-block",
-                }}
-              >
-                Try downloading instead →
-              </a>
+              {fileObjectUrl && (
+                <a
+                  href={fileObjectUrl}
+                  download={filename}
+                  style={{
+                    color: "#991b1b",
+                    textDecoration: "underline",
+                    marginTop: "10px",
+                    display: "inline-block",
+                  }}
+                >
+                  Download file →
+                </a>
+              )}
             </div>
           )}
 
@@ -319,7 +334,7 @@ export default function PDFViewer({ doc, onClose }) {
               }}
             >
               <img
-                src={fileUrl}
+                src={fileObjectUrl}
                 alt={filename}
                 style={{
                   maxWidth: "100%",
@@ -328,7 +343,7 @@ export default function PDFViewer({ doc, onClose }) {
                 }}
                 onLoad={() => setLoading(false)}
                 onError={() => {
-                  setError(true);
+                  setError("Could not display the image preview.");
                   setLoading(false);
                 }}
               />
@@ -338,7 +353,7 @@ export default function PDFViewer({ doc, onClose }) {
           {/* PDF Viewer */}
           {fileExt === "pdf" && (
             <iframe
-              src={fileUrl}
+              src={fileObjectUrl}
               style={{
                 width: "100%",
                 height: "100%",
@@ -348,7 +363,7 @@ export default function PDFViewer({ doc, onClose }) {
               onLoad={() => setLoading(false)}
               onError={() => {
                 setLoading(false);
-                setError(true);
+                setError("Could not display the PDF preview.");
               }}
             />
           )}
@@ -370,8 +385,9 @@ export default function PDFViewer({ doc, onClose }) {
           </p>
           <div style={{ display: "flex", gap: "10px" }}>
             <a
-              href={`${API}/download/${filename}`}
-              download
+              href={fileObjectUrl || undefined}
+              download={filename}
+              aria-disabled={!fileObjectUrl}
               style={{
                 background: "#667eea",
                 color: "white",

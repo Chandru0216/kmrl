@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory, abort, g
 from werkzeug.utils import secure_filename, safe_join
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_cors import CORS
 import os
@@ -85,6 +86,12 @@ CORS(
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config['JSON_SORT_KEYS'] = False
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_request_entity_too_large(error):
+    return jsonify({"error": "File exceeds 10MB limit"}), 413
+
 
 auth_secret = os.getenv("AUTH_SECRET")
 if not auth_secret:

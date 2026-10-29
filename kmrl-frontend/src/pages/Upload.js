@@ -2,7 +2,8 @@ import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import API, { apiFetch } from "../api";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const UPLOAD_TIMEOUT = 120000; // 2 minutes for AI processing
+const UPLOAD_TIMEOUT = 300000; // 5 minutes for AI processing
+const ALLOWED_EXTENSIONS = new Set(["pdf", "txt", "png", "jpg", "jpeg"]);
 
 export default function Upload({ user }) {
   const [file, setFile] = useState(null);
@@ -24,10 +25,10 @@ export default function Upload({ user }) {
 
     if (!selectedFile) return;
 
-    if (selectedFile.type !== "application/pdf") {
+    const extension = selectedFile.name.split(".").pop().toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(extension)) {
       setFile(null);
-      console.error("Invalid file type:", selectedFile.type);
-      return setError("Only PDF files are allowed.");
+      return setError("Only PDF, TXT, PNG, JPG, and JPEG files are allowed.");
     }
 
     if (selectedFile.size > MAX_FILE_SIZE) {
@@ -51,37 +52,34 @@ export default function Upload({ user }) {
     try {
       setLoading(true);
       setError(null);
-      console.log("Starting upload for:", file.name);
 
       const formData = new FormData();
       formData.append("file", file);
 
-      // Create abort controller with timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT);
+      try {
+        const res = await apiFetch(`${API}/upload`, {
+          method: "POST",
+          mode: "cors",
+          credentials: "omit",
+          body: formData,
+          signal: controller.signal,
+        });
 
-      const res = await apiFetch(`${API}/upload`, {
-        method: "POST",
-        mode: "cors",
-        credentials: "omit",
-        body: formData,
-        signal: controller.signal,
-      });
+        const result = await res.json();
+        if (!res.ok) {
+          throw new Error(result.error || `Upload failed (${res.status})`);
+        }
 
-      clearTimeout(timeoutId);
+        setUploadedFile(result);
+        setFile(null);
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Upload failed");
-      }
-
-      const data = await res.json();
-
-      setUploadedFile(data);
-      setFile(null);
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     } catch (err) {
       console.error(err);
@@ -115,7 +113,7 @@ export default function Upload({ user }) {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf"
+          accept=".pdf,.txt,.png,.jpg,.jpeg"
           disabled={loading}
           onChange={(e) => handleFileSelect(e.target.files[0])}
           style={{
