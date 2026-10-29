@@ -166,14 +166,16 @@ try:
         db = client["document_routing_db"]
         collection = db["documents"]
         users_collection = db["users"]
-        print("✓ MongoDB Atlas connection successful")
+        logging.info("MongoDB Atlas connection successful")
     else:
         raise Exception("No MONGO_URI provided")
 except Exception as e:
     if os.getenv("APP_ENV") == "production":
         raise RuntimeError("MongoDB is required in production") from e
-    print(f"⚠ MongoDB connection failed: {str(e)[:80]}...")
-    print("✓ Using in-memory fallback database for testing")
+    logging.warning("MongoDB connection failed: %s", str(e)[:80])
+    logging.warning(
+        "Using in-memory fallback database; data will not persist across restarts"
+    )
     # Use mock database as fallback
     mock_db = MockDatabase()
     collection = mock_db.documents
