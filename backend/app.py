@@ -4,7 +4,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from flask_cors import CORS
 import os
 import logging
-import hmac
 import re
 import secrets
 import pdfplumber
@@ -146,10 +145,6 @@ def register():
     if request.method == "OPTIONS":
         return "", 204
 
-    expected_code = os.getenv("REGISTRATION_CODE")
-    if not expected_code:
-        return jsonify({"error": "Account registration is not configured"}), 503
-
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return jsonify({"error": "Invalid account details"}), 400
@@ -157,16 +152,12 @@ def register():
     password = payload.get("password", "")
     fullname = payload.get("fullname", "")
     department = payload.get("department", "")
-    registration_code = payload.get("registration_code", "")
-
     if not all(isinstance(value, str) for value in (email, password, fullname, department)):
         return jsonify({"error": "Invalid account details"}), 400
     email = email.strip().lower()
     fullname = fullname.strip()
     department = department.strip()
 
-    if not hmac.compare_digest(str(registration_code), expected_code):
-        return jsonify({"error": "Invalid registration code"}), 403
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         return jsonify({"error": "Enter a valid email address"}), 400
     if not 12 <= len(password) <= 128:

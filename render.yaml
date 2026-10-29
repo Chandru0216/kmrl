@@ -17,8 +17,6 @@ services:
         sync: false
       - key: AUTH_SECRET
         generateValue: true
-      - key: REGISTRATION_CODE
-        sync: false
       - key: IMAP_HOST
         value: imap.gmail.com
       - key: EMAIL_ADDRESS

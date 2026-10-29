@@ -21,7 +21,6 @@ export default function Login({ onLogin }) {
     confirmPassword: "",
     fullname: "",
     department: "Safety & Compliance",
-    registrationCode: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -67,11 +66,6 @@ export default function Login({ onLogin }) {
           setLoading(false);
           return;
         }
-        if (!formData.registrationCode.trim()) {
-          setError("Registration code is required");
-          setLoading(false);
-          return;
-        }
       }
 
       const response = await fetch(
@@ -84,7 +78,6 @@ export default function Login({ onLogin }) {
             password: formData.password,
             fullname: formData.fullname,
             department: formData.department,
-            registration_code: formData.registrationCode,
           }),
         },
       );
@@ -250,37 +243,6 @@ export default function Login({ onLogin }) {
               ))}
             </select>
           </div>
-
-          {isRegister && (
-            <div>
-              <label
-                style={{
-                  color: "#1e293b",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                  display: "block",
-                  marginBottom: "6px",
-                }}
-              >
-                Registration Code
-              </label>
-              <input
-                type="password"
-                name="registrationCode"
-                value={formData.registrationCode}
-                onChange={handleChange}
-                autoComplete="off"
-                style={{
-                  width: "100%",
-                  padding: "12px 14px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-          )}
 
           {/* Password */}
           <div>

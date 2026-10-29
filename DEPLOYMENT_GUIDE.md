@@ -31,8 +31,8 @@ npm start
 ### Step 3: Access Application
 
 1. Open browser: `http://localhost:3000`
-2. Login with any email/password
-3. Navigate through the new features
+2. Select **Register** and create an account with a valid email address and a password of at least 12 characters.
+3. Log in with that account, then navigate through the new features.
 
 ---
 
@@ -444,14 +444,14 @@ Your system is production-ready when:
 
 ## Render and Vercel Deployment
 
-The backend requires MongoDB, a signing secret, an invite code, and an exact frontend origin in production. It will not start if MongoDB is unavailable, the signing secret is missing, CORS is wildcard/empty, or the unique user email index cannot be created.
+The backend requires MongoDB, a signing secret, and an exact frontend origin in production. It will not start if MongoDB is unavailable, the signing secret is missing, CORS is wildcard/empty, or the unique user email index cannot be created.
 
 1. Rotate the MongoDB database user's password, update `backend/.env`, and keep the connection string private.
 2. Review and commit only the intended workspace changes, then push them to the GitHub repository connected to Render and Vercel.
 3. Import the repository in Vercel with Root Directory `kmrl-frontend`. The first build can use the default local API URL; note the deployed Vercel origin.
-4. Create the Render Blueprint from `render.yaml`. Set `MONGO_URI` to the rotated connection string and `REGISTRATION_CODE` to a strong private invite code. Render generates `AUTH_SECRET` from the blueprint. Set `CORS_ORIGINS` to the exact Vercel origin, without a trailing slash.
+4. Create the Render Blueprint from `render.yaml`. Set `MONGO_URI` to the rotated connection string. Render generates `AUTH_SECRET` from the blueprint. Set `CORS_ORIGINS` to the exact Vercel origin, without a trailing slash.
 5. After Render deploys, set Vercel's `REACT_APP_API_URL` to the Render service URL and redeploy the frontend.
-6. Register with the invite code and a password of at least 12 characters. All authenticated accounts currently share access to the same document collection.
+6. Register with a valid email address and a password of at least 12 characters. All authenticated accounts currently share access to the same document collection.
 
 To enable email sync on Render, also set `EMAIL_ADDRESS` and `EMAIL_PASSWORD`; `IMAP_HOST` defaults to Gmail and can be changed for another IMAP provider.
 
