@@ -108,8 +108,10 @@ export default function Dashboard({ user }) {
         setUploadFile(null);
         await loadData();
       } else {
-        const error = await res.json();
-        setAlert({ message: `Upload failed: ${error.error}`, type: "error" });
+        const error = await res.json().catch(() => ({}));
+        const message = error.error || `Request failed (${res.status})`;
+        const details = error.details ? `: ${error.details}` : "";
+        setAlert({ message: `Upload failed: ${message}${details}`, type: "error" });
       }
     } catch (error) {
       setAlert({ message: `Error: ${error.message}`, type: "error" });

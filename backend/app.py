@@ -300,12 +300,31 @@ def ingest_document(filename, content, source_type="upload", metadata=None, sour
     if collection.find_one({"filename": filename}):
         raise DocumentIngestionError("File already exists", 409)
 
-    filepath = os.path.abspath(os.path.join(UPLOAD_FOLDER, filename))
     saved = False
     try:
-        with open(filepath, "xb") as stored_file:
-            stored_file.write(content)
-        saved = True
+        filepath = None
+        for attempt in range(10):
+            candidate_path = os.path.abspath(os.path.join(UPLOAD_FOLDER, filename))
+            if collection.find_one({"filename": filename}):
+                raise DocumentIngestionError("File already exists", 409)
+            try:
+                with open(candidate_path, "xb") as stored_file:
+                    stored_file.write(content)
+                filepath = candidate_path
+                saved = True
+                break
+            except FileExistsError:
+                if attempt == 9:
+                    raise DocumentIngestionError(
+                        "Could not find a unique filename for this upload", 409
+                    )
+                stem, extension = os.path.splitext(filename)
+                filename = f"{stem}-{secrets.token_hex(4)}{extension}"
+
+        if filepath is None:
+            raise DocumentIngestionError(
+                "Could not save the uploaded file", 409
+            )
 
         text = extract_text_from_file(filepath)
         if not text.strip():

@@ -67,9 +67,11 @@ export default function Upload({ user }) {
           signal: controller.signal,
         });
 
-        const result = await res.json();
+        const result = await res.json().catch(() => ({}));
         if (!res.ok) {
-          throw new Error(result.error || `Upload failed (${res.status})`);
+          const message = result.error || `Upload failed (${res.status})`;
+          const details = result.details ? `: ${result.details}` : "";
+          throw new Error(`${message}${details}`);
         }
 
         setUploadedFile(result);
