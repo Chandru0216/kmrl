@@ -65,22 +65,41 @@ def detect_language(text):
 # -------------------------------------------------
 # TRANSLATION
 # -------------------------------------------------
-def translate_to_english(text, language):
+def translate_to_english(text, language, *, raise_on_error=False):
     """Translate text to English if needed"""
     if language == "en":
         return text
     
     if not HAS_TRANSLATOR:
-        logging.warning(f"No translator for {language}, returning original text")
+        message = f"Translation is unavailable for language {language}"
+        if raise_on_error:
+            raise RuntimeError(message)
+        logging.warning(message)
         return text
     
     try:
         translator = GoogleTranslator(source_language=language, target_language='en')
-        translated = translator.translate(text)
+        chunks = []
+        remaining = text
+        while len(remaining) > 4500:
+            split_at = remaining.rfind(" ", 0, 4500)
+            if split_at < 1000:
+                split_at = 4500
+            chunks.append(remaining[:split_at])
+            remaining = remaining[split_at:]
+        if remaining:
+            chunks.append(remaining)
+
+        translated_chunks = [translator.translate(chunk) for chunk in chunks]
+        if any(not isinstance(chunk, str) or not chunk.strip() for chunk in translated_chunks):
+            raise RuntimeError("Translation service returned an empty result")
+        translated = "".join(translated_chunks)
         logging.info(f"Translated from {language} to en")
         return translated
     except Exception as e:
         logging.error(f"Translation failed: {e}")
+        if raise_on_error:
+            raise RuntimeError(f"Translation failed: {e}") from e
         return text
 
 

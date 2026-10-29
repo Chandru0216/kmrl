@@ -8,6 +8,7 @@ export default function PDFViewer({ doc, onClose }) {
   const [fileContent, setFileContent] = useState(null);
   const [fileObjectUrl, setFileObjectUrl] = useState(null);
   const [translatingContent, setTranslatingContent] = useState(null);
+  const [translationError, setTranslationError] = useState(null);
   const [isTranslated, setIsTranslated] = useState(false);
   const [translating, setTranslating] = useState(false);
 
@@ -26,6 +27,7 @@ export default function PDFViewer({ doc, onClose }) {
     setFileContent(null);
     setFileObjectUrl(null);
     setTranslatingContent(null);
+    setTranslationError(null);
     setIsTranslated(false);
 
     apiFetch(fileUrl, { mode: "cors" })
@@ -57,17 +59,21 @@ export default function PDFViewer({ doc, onClose }) {
 
   // Translate content to English
   const handleTranslate = async () => {
-    if (isTranslated || !fileContent) return;
+    if (translating || translatingContent) return;
 
     setTranslating(true);
+    setTranslationError(null);
     try {
       const res = await apiFetch(`${API}/translate`, {
         method: "POST",
         mode: "cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: fileContent,
-          source_language: doc.language || "auto",
+          ...(fileExt === "pdf" ? { doc_id: doc._id } : { text: fileContent }),
+          source_language:
+            doc.language && doc.language !== "unknown"
+              ? doc.language
+              : "auto",
           target_language: "English",
         }),
       });
@@ -79,11 +85,11 @@ export default function PDFViewer({ doc, onClose }) {
       } else {
         const errorData = await res.json();
         console.error("Translation API error:", errorData);
-        alert("Translation failed: " + (errorData.error || "Unknown error"));
+        setTranslationError(errorData.error || "Translation failed");
       }
     } catch (err) {
       console.error("Translation error:", err);
-      alert("Translation error: " + err.message);
+      setTranslationError("Translation failed: " + err.message);
     } finally {
       setTranslating(false);
     }
@@ -181,10 +187,7 @@ export default function PDFViewer({ doc, onClose }) {
         </div>
 
         {/* Translation Bar */}
-        {fileExt === "txt" &&
-          fileContent &&
-          doc.language &&
-          doc.language.toUpperCase() !== "ENGLISH" && (
+        {["txt", "pdf"].includes(fileExt) && fileObjectUrl && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
@@ -206,10 +209,11 @@ export default function PDFViewer({ doc, onClose }) {
                   fontWeight: "600",
                 }}
               >
-                💬 This document is in {doc.language?.toUpperCase()}. Would you
-                like to translate it to English?
+                {translatingContent
+                  ? "English translation is ready."
+                  : `Translate ${doc.language ? `from ${doc.language.toUpperCase()} ` : ""}to English.`}
               </p>
-              {!isTranslated && (
+              {!translatingContent && (
                 <button
                   onClick={handleTranslate}
                   disabled={translating}
@@ -230,18 +234,26 @@ export default function PDFViewer({ doc, onClose }) {
                     : "🌐 Translate to English"}
                 </button>
               )}
-              {isTranslated && (
-                <span
+              {translatingContent && (
+                <button
+                  onClick={() => setIsTranslated((current) => !current)}
                   style={{
-                    background: "#ffffff20",
-                    color: "white",
+                    background: "white",
+                    color: "#2563eb",
+                    border: "none",
                     padding: "8px 16px",
                     borderRadius: "6px",
                     fontWeight: "600",
                     fontSize: "13px",
+                    cursor: "pointer",
                   }}
                 >
-                  ✓ Showing English version
+                  {isTranslated ? "Show original" : "Show translation"}
+                </button>
+              )}
+              {translationError && (
+                <span role="alert" style={{ color: "white", fontSize: "13px" }}>
+                  {translationError}
                 </span>
               )}
             </motion.div>
@@ -253,7 +265,10 @@ export default function PDFViewer({ doc, onClose }) {
             flex: 1,
             overflow: "auto",
             position: "relative",
-            background: fileExt === "txt" ? "#1e293b" : "#ffffff",
+            background:
+              fileExt === "txt" || (fileExt === "pdf" && isTranslated)
+                ? "#1e293b"
+                : "#ffffff",
           }}
         >
           {loading && (
@@ -303,8 +318,8 @@ export default function PDFViewer({ doc, onClose }) {
           )}
 
           {/* Text File Viewer */}
-          {fileExt === "txt" &&
-            (isTranslated ? translatingContent : fileContent) && (
+          {((fileExt === "txt" && (isTranslated ? translatingContent : fileContent)) ||
+            (fileExt === "pdf" && isTranslated && translatingContent)) && (
               <pre
                 style={{
                   padding: "20px",
@@ -351,7 +366,7 @@ export default function PDFViewer({ doc, onClose }) {
           )}
 
           {/* PDF Viewer */}
-          {fileExt === "pdf" && (
+          {fileExt === "pdf" && !isTranslated && (
             <iframe
               src={fileObjectUrl}
               style={{

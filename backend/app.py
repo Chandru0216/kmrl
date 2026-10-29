@@ -528,12 +528,35 @@ def translate():
         return "", 204
     
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid translation request"}), 400
+
         text = data.get("text", "")
         source_language = data.get("source_language", "auto")
         target_language = data.get("target_language", "en")
+
+        if not isinstance(source_language, str) or not isinstance(target_language, str):
+            return jsonify({"error": "Invalid language selection"}), 400
+
+        if not text and data.get("doc_id"):
+            try:
+                doc_id = ObjectId(data["doc_id"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid document ID"}), 400
+            doc = collection.find_one({"_id": doc_id})
+            if not doc:
+                return jsonify({"error": "Document not found"}), 404
+
+            filename = secure_filename(doc.get("filename", ""))
+            if not filename or not allowed_file(filename):
+                return jsonify({"error": "Document file is unavailable"}), 404
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            if not os.path.isfile(filepath):
+                return jsonify({"error": "Document file is unavailable"}), 404
+            text = extract_text_from_file(filepath)
         
-        if not text:
+        if not isinstance(text, str) or not text.strip():
             return jsonify({"error": "No text provided"}), 400
         
         # Detect language if auto
@@ -541,18 +564,22 @@ def translate():
             source_language = detect_language(text)
             logging.info(f"Auto-detected language: {source_language}")
         
-        # Translate
-        translated_text = translate_to_english(text, source_language)
+        if target_language.lower() not in ("en", "english"):
+            return jsonify({"error": "Only English translation is supported"}), 400
+
+        translated_text = translate_to_english(
+            text, source_language, raise_on_error=True
+        )
         
         return jsonify({
             "translated_text": translated_text,
             "source_language": source_language,
-            "target_language": target_language
+            "target_language": "en"
         }), 200
     
     except Exception as e:
         logging.error(f"Translation failed: {e}", exc_info=True)
-        return jsonify({"error": "Translation failed", "details": str(e)}), 500
+        return jsonify({"error": str(e)}), 502
 
 
 # -------------------------------------------------
